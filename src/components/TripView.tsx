@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ref, onValue, update, push, remove, set } from 'firebase/database'
+import { ref, onValue, update, push, set } from 'firebase/database'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
-import { Trip, Category, Item } from '../types'
+import { Trip, Item } from '../types'
 import { useWeather } from '../hooks/useWeather'
-import { ArrowLeft, Share2, Plus, Trash2, Check } from 'lucide-react'
+import { ArrowLeft, Share2, Check } from 'lucide-react'
 
 interface TripViewProps {
   tripId: string
@@ -64,16 +64,11 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
       name,
       quantity: 1,
       weight: 0,
-      person: trip?.persons?.[0] || 'A',
+      person: (trip?.persons?.[0] ?? 'A') as string,
       checked: false,
       comment: ''
     })
     setNewItemName({ ...newItemName, [catId]: '' })
-  }
-
-  const deleteItem = (catId: string, itemId: string) => {
-    if (!user) return
-    remove(ref(db, `users/${user.uid}/trips/${tripId}/categories/${catId}/items/${itemId}`))
   }
 
   const addCategory = async () => {
