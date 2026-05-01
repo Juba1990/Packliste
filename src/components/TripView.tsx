@@ -114,8 +114,8 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
     alert('Liste gespeichert! ✅')
   }
 
-  const getTotalWeight = () => {
-    if (!trip?.categories) return 0
+  const getTotalWeight = (): string => {
+    if (!trip?.categories) return '0.00'
     let total = 0
     Object.values(trip.categories).forEach(cat => {
       Object.values(cat.items || {}).forEach(item => {
@@ -125,8 +125,8 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
     return (total / 1000).toFixed(2)
   }
 
-  const getPersonWeight = (person: string) => {
-    if (!trip?.categories) return 0
+  const getPersonWeight = (person: string): string => {
+    if (!trip?.categories) return '0.00'
     let total = 0
     Object.values(trip.categories).forEach(cat => {
       Object.values(cat.items || {}).forEach(item => {
@@ -145,7 +145,7 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
 
   if (!trip) return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Laden...</div>
 
-  const persons = trip.persons || ['A', 'B']
+  const persons: string[] = trip.persons || ['A', 'B']
   const totalWeight = parseFloat(getTotalWeight())
   const personAWeight = parseFloat(getPersonWeight(persons[0]))
 

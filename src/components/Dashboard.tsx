@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ref, onValue, push, remove, set } from 'firebase/database'
+import { ref, onValue, push, remove } from 'firebase/database'
 import { db } from '../firebase'
 import { useAuth } from '../context/AuthContext'
 import { Trip, SavedList } from '../types'
@@ -14,7 +14,6 @@ export default function Dashboard({ onSelectTrip }: DashboardProps) {
   const [trips, setTrips] = useState<{ [key: string]: Trip }>({})
   const [savedLists, setSavedLists] = useState<{ [key: string]: SavedList }>({})
   const [showNewTrip, setShowNewTrip] = useState(false)
-  const [showLists, setShowLists] = useState(false)
   const [newTrip, setNewTrip] = useState({ name: '', location: 'Basel', startDate: '', endDate: '' })
   const [activeTab, setActiveTab] = useState<'trips' | 'lists'>('trips')
 
