@@ -66,12 +66,15 @@ export default function Dashboard({ onSelectTrip }: DashboardProps) {
 
   const loadListAsTrip = async (list: SavedList) => {
     if (!user) return
+    const location = prompt('Reiseziel eingeben:', 'Basel') || 'Basel'
+    const startDate = prompt('Startdatum (YYYY-MM-DD):', new Date().toISOString().split('T')[0]) || new Date().toISOString().split('T')[0]
+    const endDate = prompt('Enddatum (YYYY-MM-DD):', new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]) || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const tripsRef = ref(db, `users/${user.uid}/trips`)
     const trip: Omit<Trip, 'id'> = {
       name: list.name,
-      location: 'Basel',
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      location,
+      startDate,
+      endDate,
       weightTracking: false,
       persons: ['A', 'B'],
       categories: list.categories,
