@@ -13,6 +13,14 @@ interface TripViewProps {
 
 const ACCENT = '#8B5CF6'
 
+interface NewItemState {
+  name: string
+  quantity: number
+  weight: number
+  person: string
+  comment: string
+}
+
 interface EditingItem {
   catId: string
   itemId: string
@@ -23,8 +31,6 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
   const { user } = useAuth()
   const [trip, setTrip] = useState<Trip | null>(null)
   const [filterPerson, setFilterPerson] = useState('Alle')
-  const [newItemName, setNewItemName] = useState<{ [catId: string]: string }>({})
-  const [newCatName, setNewCatName] = useState('')
   const [showShare, setShowShare] = useState(false)
   const [showSaveList, setShowSaveList] = useState(false)
   const [listName, setListName] = useState('')
@@ -38,12 +44,11 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
   const [editingPersons, setEditingPersons] = useState(false)
   const [editingCatId, setEditingCatId] = useState<string | null>(null)
   const [editingCatName, setEditingCatName] = useState('')
+  const [newCatName, setNewCatName] = useState('')
+  // Per-category add item form: catId -> NewItemState | null
+  const [addingItem, setAddingItem] = useState<{ [catId: string]: NewItemState | null }>({})
 
-  const { weather } = useWeather(
-    trip?.location || '',
-    trip?.startDate || '',
-    trip?.endDate || ''
-  )
+  const { weather } = useWeather(trip?.location || '', trip?.startDate || '', trip?.endDate || '')
 
   useEffect(() => {
     if (!user) return
@@ -59,34 +64,39 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
     update(ref(db, `users/${user.uid}/trips/${tripId}`), updates)
   }
 
-  const toggleWeightTracking = () => {
-    if (!trip) return
-    updateTrip({ weightTracking: !trip.weightTracking })
+  const persons: string[] = (trip?.persons || ['A', 'B']) as string[]
+
+  const openAddItem = (catId: string) => {
+    setAddingItem(prev => ({ ...prev, [catId]: { name: '', quantity: 1, weight: 0, person: persons[0] || 'A', comment: '' } }))
   }
 
-  const toggleItem = (catId: string, itemId: string, checked: boolean) => {
-    if (!user) return
-    update(ref(db, `users/${user.uid}/trips/${tripId}/categories/${catId}/items/${itemId}`), { checked: !checked })
+  const closeAddItem = (catId: string) => {
+    setAddingItem(prev => ({ ...prev, [catId]: null }))
   }
 
   const addItem = async (catId: string) => {
-    const name = newItemName[catId]?.trim()
-    if (!name || !user) return
+    const form = addingItem[catId]
+    if (!form || !form.name.trim() || !user) return
     const itemsRef = ref(db, `users/${user.uid}/trips/${tripId}/categories/${catId}/items`)
     await push(itemsRef, {
-      name,
-      quantity: 1,
-      weight: 0,
-      person: (trip?.persons?.[0] ?? 'A') as string,
+      name: form.name.trim(),
+      quantity: form.quantity,
+      weight: form.weight,
+      person: form.person,
       checked: false,
-      comment: ''
+      comment: form.comment
     })
-    setNewItemName({ ...newItemName, [catId]: '' })
+    closeAddItem(catId)
   }
 
   const deleteItem = (catId: string, itemId: string) => {
     if (!user) return
     remove(ref(db, `users/${user.uid}/trips/${tripId}/categories/${catId}/items/${itemId}`))
+  }
+
+  const toggleItem = (catId: string, itemId: string, checked: boolean) => {
+    if (!user) return
+    update(ref(db, `users/${user.uid}/trips/${tripId}/categories/${catId}/items/${itemId}`), { checked: !checked })
   }
 
   const saveEditingItem = () => {
@@ -135,23 +145,21 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
 
   const renamePerson = (idx: number, newName: string) => {
     if (!trip) return
-    const updated = [...(trip.persons || ['A', 'B'])]
+    const updated = [...persons]
     updated[idx] = newName
     updateTrip({ persons: updated })
   }
 
   const deletePerson = (idx: number) => {
-    if (!trip) return
-    const updated = [...(trip.persons || ['A', 'B'])]
-    if (updated.length <= 1) { alert('Mindestens eine Person benötigt.'); return }
+    if (persons.length <= 1) { alert('Mindestens eine Person benötigt.'); return }
+    const updated = [...persons]
     updated.splice(idx, 1)
     updateTrip({ persons: updated })
   }
 
   const addPerson = () => {
-    if (!trip) return
     const name = prompt('Name der neuen Person (z.B. C, Kind, Max):')
-    if (name?.trim()) updateTrip({ persons: [...(trip.persons || []), name.trim()] })
+    if (name?.trim()) updateTrip({ persons: [...persons, name.trim()] })
   }
 
   const generateShareLink = async () => {
@@ -198,9 +206,11 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
 
   if (!trip) return <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Laden...</div>
 
-  const persons: string[] = trip.persons || ['A', 'B']
   const totalWeight = parseFloat(getTotalWeight())
   const personAWeight = parseFloat(getPersonWeight(persons[0]))
+
+  const inputStyle = { padding: '7px 10px', border: '1px solid #D0D0D0', borderRadius: '6px', fontSize: '12px', color: '#1a1a1a', background: '#fff', outline: 'none', width: '100%', boxSizing: 'border-box' as const }
+  const labelStyle = { fontSize: '9px', color: '#999', fontWeight: '600' as const, textTransform: 'uppercase' as const, display: 'block' as const, marginBottom: '3px' }
 
   return (
     <div style={{ minHeight: '100vh', background: '#fff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', maxWidth: '480px', margin: '0 auto', padding: '16px' }}>
@@ -213,7 +223,6 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
           </button>
           <h1 style={{ fontSize: '28px', fontWeight: '700', margin: '0 0 8px 0', color: '#000', letterSpacing: '-0.5px' }}>{trip.name}</h1>
 
-          {/* Location */}
           {editingLocation ? (
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
               <input autoFocus value={newLocation} onChange={e => setNewLocation(e.target.value)} onKeyDown={e => e.key === 'Enter' && updateLocation()} placeholder={trip.location}
@@ -228,15 +237,12 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
             </button>
           )}
 
-          {/* Dates */}
           {editingDates ? (
             <div style={{ marginBottom: '6px' }}>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
-                <input type="date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)}
-                  style={{ padding: '6px 8px', border: `1px solid ${ACCENT}`, borderRadius: '6px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
+                <input type="date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)} style={{ padding: '6px 8px', border: `1px solid ${ACCENT}`, borderRadius: '6px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
                 <span style={{ color: '#999' }}>–</span>
-                <input type="date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)}
-                  style={{ padding: '6px 8px', border: `1px solid ${ACCENT}`, borderRadius: '6px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
+                <input type="date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)} style={{ padding: '6px 8px', border: `1px solid ${ACCENT}`, borderRadius: '6px', fontSize: '13px', outline: 'none', color: '#1a1a1a' }} />
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>
                 <button onClick={updateDates} style={{ background: ACCENT, border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}>OK</button>
@@ -252,18 +258,17 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', paddingTop: '28px' }}>
-          <button onClick={toggleWeightTracking} title="Gewicht tracken"
+          <button onClick={() => updateTrip({ weightTracking: !trip.weightTracking })} title="Gewicht tracken"
             style={{ background: trip.weightTracking ? ACCENT : '#F5F5F5', color: trip.weightTracking ? 'white' : '#666', border: 'none', borderRadius: '8px', width: '40px', height: '40px', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             🏋️
           </button>
-          <button onClick={() => setShowShare(true)}
-            style={{ background: '#F5F5F5', border: 'none', borderRadius: '8px', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={() => setShowShare(true)} style={{ background: '#F5F5F5', border: 'none', borderRadius: '8px', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Share2 size={16} color="#666" />
           </button>
         </div>
       </div>
 
-      {/* Weather - scrollable for long trips */}
+      {/* Weather */}
       {weather.length > 0 && (
         <div style={{ marginBottom: '20px' }}>
           <div style={{ fontSize: '11px', fontWeight: '600', color: '#999', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Wettervorhersage</div>
@@ -271,9 +276,7 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
             <div style={{ display: 'flex', gap: '8px', minWidth: 'max-content' }}>
               {weather.map(day => (
                 <div key={day.date} style={{ background: '#F9F9F9', border: '1px solid #F0F0F0', borderRadius: '10px', padding: '10px', textAlign: 'center', minWidth: '72px' }}>
-                  <div style={{ fontWeight: '600', fontSize: '11px', color: '#1a1a1a', marginBottom: '6px' }}>
-                    {new Date(day.date).toLocaleDateString('de-CH', { day: 'numeric', month: 'short' })}
-                  </div>
+                  <div style={{ fontWeight: '600', fontSize: '11px', color: '#1a1a1a', marginBottom: '6px' }}>{new Date(day.date).toLocaleDateString('de-CH', { day: 'numeric', month: 'short' })}</div>
                   <div style={{ fontSize: '18px', fontWeight: '300', color: '#1a1a1a', marginBottom: '1px' }}>{day.maxTemp}°</div>
                   <div style={{ fontSize: '8px', color: '#999', marginBottom: '4px' }}>{day.minTemp}° N</div>
                   <div style={{ fontSize: '10px', color: ACCENT, fontWeight: '500', whiteSpace: 'nowrap' }}>↓ {day.precipitation}mm</div>
@@ -336,15 +339,17 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
         )}
       </div>
 
-      {/* Packliste */}
+      {/* Categories + Items */}
       <div style={{ marginBottom: '14px' }}>
         {Object.entries(trip.categories || {}).map(([catId, cat]) => {
           const filteredItems = getFilteredItems(cat.items || {})
+          const formData = addingItem[catId]
+
           return (
-            <div key={catId} style={{ marginBottom: '12px' }}>
+            <div key={catId} style={{ marginBottom: '14px' }}>
               {/* Category Header */}
               <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 50px 40px 40px', gap: '6px', alignItems: 'center', marginBottom: '6px', padding: '0 2px' }}>
-                <button onClick={() => addItem(catId)} style={{ background: 'transparent', border: 'none', color: ACCENT, cursor: 'pointer', fontSize: '16px', padding: 0, fontWeight: '600' }}>+</button>
+                <button onClick={() => openAddItem(catId)} style={{ background: 'transparent', border: 'none', color: ACCENT, cursor: 'pointer', fontSize: '16px', padding: 0, fontWeight: '600' }}>+</button>
                 {editingCatId === catId ? (
                   <div style={{ display: 'flex', gap: '4px', gridColumn: '2 / 6' }}>
                     <input autoFocus value={editingCatName} onChange={e => setEditingCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && renameCategory(catId)}
@@ -356,7 +361,7 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
                 ) : (
                   <>
                     <div onClick={() => { setEditingCatId(catId); setEditingCatName(cat.name) }}
-                      style={{ fontWeight: '700', fontSize: '11px', color: '#000', cursor: 'pointer' }} title="Klicken zum Umbenennen/Löschen">
+                      style={{ fontWeight: '700', fontSize: '11px', color: '#000', cursor: 'pointer' }}>
                       {cat.name}
                     </div>
                     {trip.weightTracking ? <div style={{ fontSize: '10px', fontWeight: '600', color: '#999', textAlign: 'right', textTransform: 'uppercase' }}>Gewicht</div> : <div />}
@@ -366,19 +371,19 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
                 )}
               </div>
 
-              {/* Items */}
+              {/* Items list */}
               {Object.keys(filteredItems).length > 0 && (
-                <div style={{ background: '#F9F9F9', border: '1px solid #F0F0F0', borderRadius: '8px', overflow: 'hidden', marginBottom: '6px' }}>
+                <div style={{ background: '#F9F9F9', border: '1px solid #F0F0F0', borderRadius: '8px', overflow: 'hidden', marginBottom: '8px' }}>
                   {Object.entries(filteredItems).map(([itemId, item], i, arr) => (
                     <div key={itemId}>
-                      {editingItem?.itemId !== itemId ? (
+                      {/* Normal view */}
+                      {editingItem?.itemId !== itemId && (
                         <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 50px 40px 40px', gap: '6px', alignItems: 'center', padding: '8px', borderBottom: i < arr.length - 1 ? '1px solid #F0F0F0' : 'none', opacity: item.checked ? 0.5 : 1 }}>
                           <div onClick={() => toggleItem(catId, itemId, item.checked)}
                             style={{ width: '16px', height: '16px', borderRadius: '4px', border: item.checked ? 'none' : '1.5px solid #D0D0D0', background: item.checked ? ACCENT : 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             {item.checked && <Check size={10} color="white" strokeWidth={3} />}
                           </div>
-                          <div onClick={() => setEditingItem({ catId, itemId, item: { ...item } })}
-                            style={{ fontSize: '12px', fontWeight: '500', color: '#1a1a1a', textDecoration: item.checked ? 'line-through' : 'none', cursor: 'pointer' }}>
+                          <div onClick={() => setEditingItem({ catId, itemId, item: { ...item } })} style={{ fontSize: '12px', fontWeight: '500', color: '#1a1a1a', textDecoration: item.checked ? 'line-through' : 'none', cursor: 'pointer' }}>
                             {item.name}
                             {item.comment && <span style={{ color: '#CCC', fontSize: '10px', marginLeft: '4px' }}>· {item.comment}</span>}
                           </div>
@@ -391,34 +396,36 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
                             </button>
                           </div>
                         </div>
-                      ) : (
+                      )}
+
+                      {/* Edit view */}
+                      {editingItem?.itemId === itemId && (
                         <div style={{ padding: '10px', borderBottom: i < arr.length - 1 ? '1px solid #F0F0F0' : 'none', background: '#F5F2FF' }}>
                           <input value={editingItem.item.name} onChange={e => setEditingItem({ ...editingItem, item: { ...editingItem.item, name: e.target.value } })}
-                            style={{ width: '100%', padding: '6px 8px', border: '1px solid #D0D0D0', borderRadius: '6px', fontSize: '12px', color: '#1a1a1a', marginBottom: '8px', boxSizing: 'border-box', outline: 'none' }} />
+                            style={{ ...inputStyle, marginBottom: '8px' }} />
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '8px' }}>
                             <div>
-                              <label style={{ fontSize: '9px', color: '#999', fontWeight: '600', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>Menge</label>
+                              <label style={labelStyle}>Menge</label>
                               <input type="number" min="1" value={editingItem.item.quantity}
                                 onChange={e => setEditingItem({ ...editingItem, item: { ...editingItem.item, quantity: parseInt(e.target.value) || 1 } })}
-                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #D0D0D0', borderRadius: '6px', fontSize: '12px', color: '#1a1a1a', boxSizing: 'border-box', outline: 'none' }} />
+                                style={inputStyle} />
                             </div>
                             <div>
-                              <label style={{ fontSize: '9px', color: '#999', fontWeight: '600', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>Gewicht (g)</label>
+                              <label style={labelStyle}>Gewicht (g)</label>
                               <input type="number" min="0" value={editingItem.item.weight || 0}
                                 onChange={e => setEditingItem({ ...editingItem, item: { ...editingItem.item, weight: parseInt(e.target.value) || 0 } })}
-                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #D0D0D0', borderRadius: '6px', fontSize: '12px', color: '#1a1a1a', boxSizing: 'border-box', outline: 'none' }} />
+                                style={inputStyle} />
                             </div>
                             <div>
-                              <label style={{ fontSize: '9px', color: '#999', fontWeight: '600', textTransform: 'uppercase', display: 'block', marginBottom: '3px' }}>Person</label>
+                              <label style={labelStyle}>Person</label>
                               <select value={editingItem.item.person} onChange={e => setEditingItem({ ...editingItem, item: { ...editingItem.item, person: e.target.value } })}
-                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #D0D0D0', borderRadius: '6px', fontSize: '12px', color: '#1a1a1a', background: '#fff', boxSizing: 'border-box', outline: 'none' }}>
+                                style={{ ...inputStyle, background: '#fff' }}>
                                 {persons.map(p => <option key={p} value={p}>{p}</option>)}
                               </select>
                             </div>
                           </div>
                           <input value={editingItem.item.comment || ''} onChange={e => setEditingItem({ ...editingItem, item: { ...editingItem.item, comment: e.target.value } })}
-                            placeholder="Kommentar (optional)"
-                            style={{ width: '100%', padding: '6px 8px', border: '1px solid #D0D0D0', borderRadius: '6px', fontSize: '12px', color: '#1a1a1a', marginBottom: '8px', boxSizing: 'border-box', outline: 'none' }} />
+                            placeholder="Kommentar (optional)" style={{ ...inputStyle, marginBottom: '8px' }} />
                           <div style={{ display: 'flex', gap: '6px' }}>
                             <button onClick={() => setEditingItem(null)} style={{ flex: 1, padding: '7px', background: '#F5F5F5', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#333' }}>Abbrechen</button>
                             <button onClick={saveEditingItem} style={{ flex: 2, padding: '7px', background: ACCENT, border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: 'white', fontWeight: '600' }}>Speichern</button>
@@ -430,15 +437,53 @@ export default function TripView({ tripId, onBack }: TripViewProps) {
                 </div>
               )}
 
-              {/* Add Item */}
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <input value={newItemName[catId] || ''} onChange={e => setNewItemName({ ...newItemName, [catId]: e.target.value })} onKeyDown={e => e.key === 'Enter' && addItem(catId)}
-                  placeholder={`+ Item zu ${cat.name}`}
-                  style={{ flex: 1, padding: '7px 10px', border: '1px solid #E8E8E8', borderRadius: '6px', fontSize: '12px', color: '#1a1a1a', background: '#FAFAFA', outline: 'none' }} />
-                {newItemName[catId] && (
-                  <button onClick={() => addItem(catId)} style={{ background: ACCENT, border: 'none', borderRadius: '6px', padding: '7px 12px', color: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}>+</button>
-                )}
-              </div>
+              {/* Add Item Form - always visible when open */}
+              {formData != null ? (
+                <div style={{ background: '#F5F2FF', border: `1px solid ${ACCENT}`, borderRadius: '8px', padding: '10px' }}>
+                  <input
+                    autoFocus
+                    value={formData.name}
+                    onChange={e => setAddingItem(prev => ({ ...prev, [catId]: { ...prev[catId]!, name: e.target.value } }))}
+                    placeholder="Item Name"
+                    style={{ ...inputStyle, marginBottom: '8px' }}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+                    <div>
+                      <label style={labelStyle}>Menge</label>
+                      <input type="number" min="1" value={formData.quantity}
+                        onChange={e => setAddingItem(prev => ({ ...prev, [catId]: { ...prev[catId]!, quantity: parseInt(e.target.value) || 1 } }))}
+                        style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Gewicht (g)</label>
+                      <input type="number" min="0" value={formData.weight}
+                        onChange={e => setAddingItem(prev => ({ ...prev, [catId]: { ...prev[catId]!, weight: parseInt(e.target.value) || 0 } }))}
+                        style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Person</label>
+                      <select value={formData.person}
+                        onChange={e => setAddingItem(prev => ({ ...prev, [catId]: { ...prev[catId]!, person: e.target.value } }))}
+                        style={{ ...inputStyle, background: '#fff' }}>
+                        {persons.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <input value={formData.comment}
+                    onChange={e => setAddingItem(prev => ({ ...prev, [catId]: { ...prev[catId]!, comment: e.target.value } }))}
+                    placeholder="Kommentar (optional)"
+                    style={{ ...inputStyle, marginBottom: '8px' }} />
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button onClick={() => closeAddItem(catId)} style={{ flex: 1, padding: '7px', background: '#F5F5F5', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#333' }}>Abbrechen</button>
+                    <button onClick={() => addItem(catId)} style={{ flex: 2, padding: '7px', background: ACCENT, border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: 'white', fontWeight: '600' }}>Hinzufügen</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => openAddItem(catId)}
+                  style={{ width: '100%', padding: '7px 10px', border: '1px dashed #D0D0D0', borderRadius: '6px', fontSize: '12px', color: '#999', background: '#FAFAFA', cursor: 'pointer', textAlign: 'left' }}>
+                  + Item hinzufügen
+                </button>
+              )}
             </div>
           )
         })}
